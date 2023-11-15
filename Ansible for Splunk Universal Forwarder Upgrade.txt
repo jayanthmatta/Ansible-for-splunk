@@ -1,0 +1,106 @@
+
+- name: Configure Splunk Forwarder
+  hosts: your_target_hosts
+  become: yes
+  vars:
+    splunk_forwarder_seed_password: "{{ splunk_forwarder_seed_password }}"
+    splunk_forwarder_reset_seeded_password: "{{ splunk_forwarder_reset_seeded_password }}"
+    splunk_forwarder_password_config_file: "{{ splunk_forwarder_password_config_file }}"
+    splunk_forwarder_seed_config_file: "{{ splunk_forwarder_seed_config_file }}"
+    splunk_forwarder_seed_user: "{{ splunk_forwarder_seed_user }}"
+    splunk_forwarder_password_hash: "{{ splunk_forwarder_password_hash }}"
+    splunk_forwarder_secret_file: "{{ splunk_forwarder_secret_file }}"
+    splunk_forwarder_secret: "{{ splunk_forwarder_secret }}"
+    splunk_forwarder_splunk_user: "{{ splunk_forwarder_splunk_user }}"
+    splunk_forwarder_manage_password: "{{ splunk_forwarder_manage_password }}"
+    splunk_forwarder_version: "{{ splunk_forwarder_version }}"
+    splunk_forwarder_forwarder_homedir: "{{ splunk_forwarder_forwarder_homedir }}"
+    splunk_forwarder_splunkd_listen: "{{ splunk_forwarder_splunkd_listen }}"
+    splunk_forwarder_splunkd_port: "{{ splunk_forwarder_splunkd_port }}"
+    splunk_forwarder_use_default_config: "{{ splunk_forwarder_use_default_config }}"
+    splunk_forwarder_forwarder_input: "{{ splunk_forwarder_forwarder_input }}"
+    splunk_forwarder_forwarder_deployment: "{{ splunk_forwarder_forwarder_deployment }}"
+    splunk_forwarder_forwarder_output: "{{ splunk_forwarder_forwarder_output }}"
+    splunk_forwarder_addons: "{{ splunk_forwarder_addons }}"
+
+  tasks:
+    - name: Set Splunk Seed Password
+      when: splunk_forwarder_seed_password is defined
+      set_fact:
+        splunk_seed_password:
+          reset_seeded_password: "{{ splunk_forwarder_reset_seeded_password }}"
+          password_config_file: "{{ splunk_forwarder_password_config_file }}"
+          seed_config_file: "{{ splunk_forwarder_seed_config_file }}"
+          seed_user: "{{ splunk_forwarder_seed_user }}"
+          password_hash: "{{ splunk_forwarder_password_hash }}"
+          secret_file: "{{ splunk_forwarder_secret_file }}"
+          secret: "{{ splunk_forwarder_secret }}"
+          splunk_user: "{{ splunk_forwarder_splunk_user }}"
+          mode: 'agent'
+
+    - name: Set Splunk Manage Password
+      when: splunk_forwarder_manage_password is defined
+      set_fact:
+        splunk_manage_password:
+          manage_password: "{{ splunk_forwarder_manage_password }}"
+          password_config_file: "{{ splunk_forwarder_password_config_file }}"
+          password_content: "{{ splunk_forwarder_password_content }}"
+          secret: "{{ splunk_forwarder_secret_file }}"
+          secret_file: "{{ splunk_forwarder_secret }}"
+          splunk_user: "{{ splunk_forwarder_splunk_user }}"
+          mode: 'agent'
+
+    - name: Remove init.d file if service provider is systemd and version >= 7.2.2
+      command: rm -f /etc/init.d/splunk
+      when: ansible_facts['ansible_service_mgr'] == 'systemd' and splunk_forwarder_version | version_compare('7.2.2', '>=')
+
+    - name: Ensure configuration files are present
+      file:
+        path: "{{ item }}"
+        state: file
+        owner: "{{ splunk_forwarder_splunk_user }}"
+        group: "{{ splunk_forwarder_splunk_user }}"
+        mode: "{{ item == splunk_forwarder_forwarder_homedir + '/etc/system/local/limits.conf' or item == splunk_forwarder_forwarder_homedir + '/etc/system/local/server.conf' ? '0600' : '0644' }}"
+      with_items:
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/deploymentclient.conf"
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/outputs.conf"
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/inputs.conf"
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/props.conf"
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/transforms.conf"
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/web.conf"
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/limits.conf"
+        - "{{ splunk_forwarder_forwarder_homedir }}/etc/system/local/server.conf"
+
+    - name: Configure Splunk Web
+      when: splunk_forwarder_use_default_config is defined and splunk_forwarder_use_default_config
+      splunk_forwarder_web:
+        section: 'settings'
+        setting: 'mgmtHostPort'
+        value: "{{ splunk_forwarder_splunkd_listen }}:{{ splunk_forwarder_splunkd_port }}"
+
+    - name: Configure Splunk Forwarder Inputs
+      when: splunk_forwarder_forwarder_input is defined and splunk_forwarder_use_default_config
+      splunkforwarder_input:
+        name: "{{ item.key }}"
+        section: "{{ item.value.section }}"
+        setting: "{{ item.value.setting }}"
+        value: "{{ item.value.value }}"
+      with_dict: "{{ splunk_forwarder_forwarder_input }}"
+
+    - name: Configure Splunk Forwarder Deployment
+      when: splunk_forwarder_forwarder_deployment is defined and splunk_forwarder_use_default_config
+      splunkforwarder_deploymentclient:
+        name: "{{ item.key }}"
+        section: "{{ item.value.section }}"
+        setting: "{{ item.value.setting }}"
+        value: "{{ item.value.value }}"
+      with_dict: "{{ splunk_forwarder_forwarder_deployment }}"
+
+    - name: Configure Splunk Forwarder Output
+      when: splunk_forwarder_forwarder_output is defined and splunk_forwarder_use_default_config
+      splunkforwarder_output:
+        name: "{{ item.key }}"
+        section: "{{ item.value.section }}"
+        setting: "{{ item.value.setting }}"
+        value: "{{ item.value.value }}"
+      with_dict: "{{ splunk_forwarder_forwarder_output }}"
