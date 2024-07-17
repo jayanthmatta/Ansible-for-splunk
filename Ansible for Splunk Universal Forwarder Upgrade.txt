@@ -4,6 +4,7 @@
   become: yes
   vars:
     New line added
+	New second line
     splunk_forwarder_seed_password: "{{ splunk_forwarder_seed_password }}"
     splunk_forwarder_reset_seeded_password: "{{ splunk_forwarder_reset_seeded_password }}"
     splunk_forwarder_password_config_file: "{{ splunk_forwarder_password_config_file }}"
